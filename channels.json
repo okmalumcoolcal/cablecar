@@ -158,6 +158,8 @@
       "shuffle": false
     }
   ],
-  "durationCache": {},
+  "durationCache": {
+    "\\\\Mac\\Home\\Downloads\\CALN_RECWRK\\24_TransferToRecDrive\\0_CNAIRCN_Downloads\\CableCar\\Channel1\\Gen.V.S01.COMPLETE.720p.AMZN.WEBRip.x264-GalaxyTV[TGx]\\Gen.V.S01E01.720p.AMZN.WEBRip.x264-GalaxyTV.mkv": 3525
+  },
   "lastPort": 3000
 }

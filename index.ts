@@ -1,61 +1,88 @@
-import { scanMediaRoot } from "./src/modules/scanner";
-import { getCurrentSchedule } from "./src/modules/scheduler";
-import { loadConfig, saveConfig } from "./src/modules/config";
+import { loadConfig, saveConfig }       from "./src/modules/config";
+import { getCurrentSchedule }           from "./src/modules/scheduler";
+import { findVlc, launchVlc, playFile,
+         getStatus, stop }              from "./src/modules/vlc";
 
-const MEDIA_ROOT =
-  "\\\\Mac\\Home\\Downloads\\CALN_RECWRK\\24_TransferToRecDrive\\0_CNAIRCN_Downloads\\CableCar";
+/* ── Loading config ──────────────────────────────────────────── */
 
-/* Loading existing config to preserve any stored anchor times */
 const config = loadConfig();
-const channels = scanMediaRoot(MEDIA_ROOT);
-const now = Date.now();
 
-/* Preserving anchor times for known channels, assigning fresh ones for new channels */
-for (const channel of channels)
+/* ── Finding VLC ─────────────────────────────────────────────── */
+
+const vlcPath = findVlc();
+
+if (!vlcPath)
 {
-  const existing = config.channels.find(c => c.id === channel.id);
-  channel.anchorTime = existing?.anchorTime ?? now;
-  channel.shuffle = existing?.shuffle ?? false;
+  console.error("VLC not found — install VLC from videolan.org");
+  process.exit(1);
 }
 
-config.mediaRoot = MEDIA_ROOT;
-config.channels = channels;
-saveConfig(config);
+console.log(`VLC found: ${vlcPath}`);
 
-console.log("--- Scheduler test: current time ---\n");
+/* ── Launching VLC with HTTP interface ───────────────────────── */
 
-for (const channel of channels)
+console.log("Launching VLC...");
+await launchVlc(vlcPath);
+console.log("VLC HTTP interface ready\n");
+
+/* ── Scheduler: current position for Channel1 ────────────────── */
+
+const channel = config.channels[0];
+
+if (!channel)
 {
-  const result = getCurrentSchedule(channel, now, config.durationCache);
+  console.error("No channels in channels.json — run the scanner first");
+  process.exit(1);
+}
 
-  if (!result)
+const result = getCurrentSchedule(channel, Date.now(), config.durationCache);
+
+if (!result)
+{
+  console.error("Scheduler returned null — channel has no files");
+  process.exit(1);
+}
+
+console.log(`--- Channel: ${channel.name} ---`);
+console.log(`  File:     ${result.file.name}`);
+console.log(`  Position: ${result.fileIndex + 1} of ${result.totalFiles}`);
+console.log(`  Seek to:  ${result.seekSeconds}s\n`);
+
+/* ── Sending play + seek to VLC ──────────────────────────────── */
+
+console.log("Sending play command to VLC...");
+await playFile(result.file.path, result.seekSeconds);
+console.log("Play command sent\n");
+
+/* ── Reading status after 3 seconds ─────────────────────────── */
+
+console.log("Waiting 3 seconds...");
+await Bun.sleep(3000);
+
+const status = await getStatus();
+
+if (status)
+{
+  console.log("VLC status:");
+  console.log(`  State:    ${status.state}`);
+  console.log(`  Time:     ${status.time}s`);
+  console.log(`  Duration: ${status.length}s`);
+  console.log(`  Position: ${(status.position * 100).toFixed(1)}%\n`);
+
+  /* Caching the probed duration if VLC reported a valid length */
+  if (status.length > 0)
   {
-    console.log(`${channel.name}: no files\n`);
-    continue;
+    config.durationCache[result.file.path] = status.length;
+    saveConfig(config);
+    console.log(`Duration cached: ${status.length}s written to channels.json`);
   }
-
-  const durationSource = config.durationCache[result.file.path] ? "probed" : "default 90min";
-
-  console.log(`Channel: ${channel.name}`);
-  console.log(`  Playing:  ${result.file.name}`);
-  console.log(`  Position: file ${result.fileIndex + 1} of ${result.totalFiles}`);
-  console.log(`  Seek to:  ${result.seekSeconds}s  (duration source: ${durationSource})`);
-  console.log("");
 }
-
-/* Simulating 3 hours elapsed to verify scheduler advances correctly */
-const threeHoursMs = 3 * 60 * 60 * 1000;
-console.log("--- Scheduler test: +3 hours ---\n");
-
-for (const channel of channels)
+else
 {
-  const result = getCurrentSchedule(channel, now + threeHoursMs, config.durationCache);
-
-  if (!result) continue;
-
-  console.log(`Channel: ${channel.name}`);
-  console.log(`  Playing:  ${result.file.name}`);
-  console.log(`  Position: file ${result.fileIndex + 1} of ${result.totalFiles}`);
-  console.log(`  Seek to:  ${result.seekSeconds}s`);
-  console.log("");
+  console.log("Could not read VLC status");
 }
+
+/* ── Stopping VLC ────────────────────────────────────────────── */
+
+await stop();
+console.log("\n04_VlcBridge smoke test complete.");
