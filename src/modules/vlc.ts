@@ -8,6 +8,11 @@ const VLC_PORT     = 8080;
 const VLC_PASSWORD = "cablecar";
 const VLC_AUTH     = btoa(`:${VLC_PASSWORD}`);
 
+/* Constants consumed by 06_Integration polling loop */
+export const POLL_INTERVAL_MS    = 3000;
+export const DRIFT_THRESHOLD_S   = 30;
+export const MAX_STATUS_FAILURES = 5;
+
 /* ─── Process handle ─────────────────────────────────────────── */
 
 let vlcProc: ReturnType<typeof Bun.spawn> | null = null;
