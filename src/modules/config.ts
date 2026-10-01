@@ -42,9 +42,9 @@ const DEFAULT_CONFIG: AppConfig =
 /* Resolving channels.json location — beside the binary in production, cwd in dev */
 function getConfigPath(): string
 {
-  const execPath = Bun.argv[0] ?? process.execPath;
-  const isCompiled = !execPath.toLowerCase().includes("bun");
-  const configDir = isCompiled ? dirname(execPath) : process.cwd();
+  const argv0 = Bun.argv[0] ?? "";
+  const isCompiled = !argv0.toLowerCase().includes("bun");
+  const configDir = isCompiled ? dirname(argv0) : process.cwd();
   return join(configDir, "channels.json");
 }
 
